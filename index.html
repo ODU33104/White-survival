@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#dff4ff" />
+  <title>Frostline Frontier</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main id="app">
+    <canvas id="game" width="960" height="540" aria-label="Frostline Frontier game canvas"></canvas>
+
+    <section id="hud" class="hud hidden">
+      <div class="hud-left">
+        <button id="pauseBtn" class="icon-btn" aria-label="一時停止">Ⅱ</button>
+        <div>
+          <div id="stageTitle" class="stage-title"></div>
+          <div id="objective" class="objective"></div>
+        </div>
+      </div>
+      <div class="hud-right">
+        <div class="pill">🪙 <span id="coinHud">0</span></div>
+        <div class="pill">🎒 <span id="carryHud">0/0</span></div>
+      </div>
+      <div class="progress-track"><div id="goalBar" class="progress-fill"></div></div>
+    </section>
+
+    <section id="titleScreen" class="panel-screen">
+      <div class="hero-card">
+        <div class="eyebrow">ORIGINAL BROWSER SURVIVAL GAME</div>
+        <h1>FROSTLINE<br/>FRONTIER</h1>
+        <p>集める。背負う。運ぶ。建てる。守る。</p>
+        <button id="startBtn" class="primary">ステージ選択</button>
+        <button id="resetBtn" class="ghost danger">セーブを初期化</button>
+        <small>※既存ゲームの画像・名称・音源は使用していません。</small>
+      </div>
+    </section>
+
+    <section id="stageScreen" class="panel-screen hidden">
+      <div class="menu-card wide">
+        <div class="menu-head">
+          <div>
+            <div class="eyebrow">EXPEDITION MAP</div>
+            <h2>雪原遠征</h2>
+          </div>
+          <div class="currency">🪙 <span id="coinMenu">0</span></div>
+        </div>
+        <div id="stageGrid" class="stage-grid"></div>
+        <div class="menu-actions">
+          <button id="upgradeBtn" class="secondary">強化</button>
+          <button id="backTitleBtn" class="ghost">タイトルへ</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="upgradeScreen" class="panel-screen hidden">
+      <div class="menu-card">
+        <div class="menu-head">
+          <div><div class="eyebrow">PERMANENT UPGRADES</div><h2>遠征装備</h2></div>
+          <div class="currency">🪙 <span id="coinUpgrade">0</span></div>
+        </div>
+        <div id="upgradeList" class="upgrade-list"></div>
+        <button id="upgradeBackBtn" class="primary">戻る</button>
+      </div>
+    </section>
+
+    <section id="pauseScreen" class="panel-screen hidden translucent">
+      <div class="menu-card compact">
+        <div class="eyebrow">PAUSED</div>
+        <h2>一時停止</h2>
+        <button id="resumeBtn" class="primary">続ける</button>
+        <button id="restartBtn" class="secondary">ステージを最初から</button>
+        <button id="quitBtn" class="ghost">ステージ選択へ</button>
+      </div>
+    </section>
+
+    <section id="completeScreen" class="panel-screen hidden translucent">
+      <div class="menu-card compact result-card">
+        <div class="eyebrow">STAGE CLEAR</div>
+        <h2 id="clearTitle">クリア！</h2>
+        <div id="stars" class="stars">★★★</div>
+        <p id="resultText"></p>
+        <button id="nextBtn" class="primary">次へ</button>
+        <button id="selectBtn" class="ghost">ステージ選択</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
