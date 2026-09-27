@@ -11,7 +11,7 @@
   const W = canvas.width;
   const H = canvas.height;
   const WORLD = { w: 900, h: 1450 };
-  const CELL = 88;
+  const CELL = 160;
   const ROW = { down: 0, right: 1, left: 2, up: 3 };
 
   const atlas = new Image();
@@ -28,7 +28,8 @@
       vy: 0,
       dir: 'down',
       frame: 0,
-      animClock: 0
+      animClock: 0,
+      stepDistance: 0
     },
     camera: { x: 0, y: 0 },
     input: {
@@ -119,7 +120,7 @@
     const p = pointerPos(e);
     let dx = p.x - j.cx;
     let dy = p.y - j.cy;
-    const radius = 66;
+    const radius = 52;
     const len = Math.hypot(dx, dy);
 
     if (len > radius) {
@@ -127,22 +128,17 @@
       dy = dy / len * radius;
     }
 
-    let nx = dx / radius;
-    let ny = dy / radius;
-    const dead = 0.11;
-    const m = Math.hypot(nx, ny);
-
-    if (m < dead) {
-      nx = 0;
-      ny = 0;
+    const deadPx = 11;
+    if (len < deadPx) {
+      j.x = 0;
+      j.y = 0;
     } else {
-      const scaled = (m - dead) / (1 - dead);
-      nx = nx / m * scaled;
-      ny = ny / m * scaled;
+      // 広告系ゲームの操作感に寄せて、入力強度ではなく方向だけを使う。
+      // 少し倒しただけでも一定速度で動くので、親指の距離調整が不要。
+      const safe = Math.max(len, 0.0001);
+      j.x = dx / safe;
+      j.y = dy / safe;
     }
-
-    j.x = nx;
-    j.y = ny;
   });
 
   function releasePointer(e) {
@@ -194,44 +190,53 @@
     chooseDirection(input.x, input.y);
 
     const chopping = state.mode === 'chop';
-    const targetSpeed = chopping ? 0 : 270;
-    const targetVx = input.x * targetSpeed;
-    const targetVy = input.y * targetSpeed;
+    const movingInput = input.mag > 0.01;
+    const speed = 248;
 
-    const accel = 1 - Math.exp(-13 * dt);
-    const brake = 1 - Math.exp(-17 * dt);
+    // 加速・減速を廃止。指の方向へ即座に一定速度で移動し、離したら即停止。
+    if (!chopping && movingInput) {
+      const m = Math.hypot(input.x, input.y) || 1;
+      p.vx = input.x / m * speed;
+      p.vy = input.y / m * speed;
+    } else {
+      p.vx = 0;
+      p.vy = 0;
+    }
 
-    p.vx = lerp(p.vx, targetVx, input.mag > 0.01 ? accel : brake);
-    p.vy = lerp(p.vy, targetVy, input.mag > 0.01 ? accel : brake);
+    const dx = p.vx * dt;
+    const dy = p.vy * dt;
+    p.x = clamp(p.x + dx, 70, WORLD.w - 70);
+    p.y = clamp(p.y + dy, 130, WORLD.h - 100);
 
-    if (Math.abs(p.vx) < 0.25) p.vx = 0;
-    if (Math.abs(p.vy) < 0.25) p.vy = 0;
-
-    p.x = clamp(p.x + p.vx * dt, 70, WORLD.w - 70);
-    p.y = clamp(p.y + p.vy * dt, 130, WORLD.h - 100);
-
-    const moving = Math.hypot(p.vx, p.vy) > 12;
+    const moving = Math.hypot(p.vx, p.vy) > 1;
 
     if (state.mode === 'normal') {
       if (moving) {
-        p.animClock += dt;
-        const frames = [1, 2, 3, 2];
-        p.frame = frames[Math.floor(p.animClock / 0.115) % frames.length];
+        p.stepDistance += Math.hypot(dx, dy);
+        // 立ち→左足→立ち→右足を距離基準で回す。
+        // 実際に進んだ距離と足運びが同期するので「滑っている」見え方を減らす。
+        const frames = [0, 1, 0, 2, 0, 3];
+        p.frame = frames[Math.floor(p.stepDistance / 11) % frames.length];
       } else {
-        p.animClock = 0;
         p.frame = 0;
+        p.stepDistance = 0;
       }
     } else if (state.mode === 'carry') {
-      p.animClock += dt;
-      p.frame = moving ? 4 + (Math.floor(p.animClock / 0.16) % 2) : 4;
+      if (moving) {
+        p.stepDistance += Math.hypot(dx, dy);
+        p.frame = 4 + (Math.floor(p.stepDistance / 18) % 2);
+      } else {
+        p.frame = 4;
+        p.stepDistance = 0;
+      }
     } else {
       p.animClock += dt;
-      p.frame = 6 + (Math.floor(p.animClock / 0.135) % 2);
+      p.frame = 6 + (Math.floor(p.animClock / 0.16) % 2);
     }
 
     const targetCamX = clamp(p.x - W / 2, 0, WORLD.w - W);
     const targetCamY = clamp(p.y - H * 0.58, 0, WORLD.h - H);
-    const camEase = 1 - Math.exp(-8 * dt);
+    const camEase = 1 - Math.exp(-14 * dt);
     state.camera.x = lerp(state.camera.x, targetCamX, camEase);
     state.camera.y = lerp(state.camera.y, targetCamY, camEase);
 
@@ -240,6 +245,7 @@
       '  mode ' + state.mode +
       '  frame ' + p.frame +
       '  speed ' + Math.round(Math.hypot(p.vx, p.vy)) +
+      '  cell ' + CELL +
       '  asset ' + (atlasReady ? 'READY' : atlasError ? 'ERROR' : 'LOAD');
   }
 
@@ -302,12 +308,14 @@
     ctx.fill();
 
     if (atlasReady) {
-      const size = state.mode === 'carry' ? 184 : 174;
+      const size = state.mode === 'carry' ? 188 : 180;
+      const moving = Math.hypot(p.vx, p.vy) > 1;
+      const bob = moving && state.mode !== 'chop' ? Math.abs(Math.sin(p.stepDistance / 11 * Math.PI)) * 3 : 0;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(
         atlas,
         col * CELL, row * CELL, CELL, CELL,
-        -size / 2, -size * 0.72, size, size
+        -size / 2, -size * 0.72 - bob, size, size
       );
     } else {
       ctx.fillStyle = '#7d2323';
@@ -330,12 +338,12 @@
     ctx.globalAlpha = 0.24;
     ctx.fillStyle = '#173b4c';
     ctx.beginPath();
-    ctx.arc(j.cx, j.cy, 66, 0, Math.PI * 2);
+    ctx.arc(j.cx, j.cy, 52, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.globalAlpha = 0.54;
     ctx.beginPath();
-    ctx.arc(j.cx + j.x * 43, j.cy + j.y * 43, 28, 0, Math.PI * 2);
+    ctx.arc(j.cx + j.x * 34, j.cy + j.y * 34, 23, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
