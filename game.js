@@ -42,9 +42,17 @@
   let save = loadSave();
 
   const walkSheet = new Image();
+  const carrySheet = new Image();
+  const actionSheet = new Image();
   walkSheet.src = 'assets/player/walk.webp';
+  carrySheet.src = 'assets/player/carry.webp';
+  actionSheet.src = 'assets/player/action.webp';
   let spriteReady = false;
+  let carryReady = false;
+  let actionReady = false;
   walkSheet.onload = () => { spriteReady = true; };
+  carrySheet.onload = () => { carryReady = true; };
+  actionSheet.onload = () => { actionReady = true; };
 
   const state = {
     screen: 'title',
@@ -643,13 +651,22 @@
   function drawPlayer() {
     const p = state.player;
     const row = { down: 0, right: 1, left: 2, up: 3 }[p.dir] || 0;
+
+    let sheet = walkSheet;
+    let ready = spriteReady;
     let col = p.frame;
 
-    if (p.action === 'chop') {
-      col = Math.floor(state.elapsed * 10) % 2 ? 1 : 3;
+    if (p.action === 'chop' && actionReady) {
+      sheet = actionSheet;
+      ready = true;
+      col = 2 + (Math.floor(state.elapsed * 8) % 2);
+    } else if (p.logs > 0 && carryReady) {
+      sheet = carrySheet;
+      ready = true;
+      col = p.moving ? p.frame : 0;
+    } else if (p.logs > 0) {
+      drawLogStack(p);
     }
-
-    drawLogStack(p);
 
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -659,22 +676,22 @@
     ctx.ellipse(0, 32, 36, 14, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    if (spriteReady) {
-      const sw = walkSheet.width / 4;
-      const sh = walkSheet.height / 4;
-      const dw = 132;
-      const dh = 132;
+    if (ready) {
+      const sw = sheet.width / 4;
+      const sh = sheet.height / 4;
+      const dw = p.action === 'chop' ? 148 : (p.logs > 0 ? 142 : 132);
+      const dh = dw;
       ctx.drawImage(
-        walkSheet,
+        sheet,
         col * sw, row * sh, sw, sh,
-        -dw / 2, -101, dw, dh
+        -dw / 2, -108, dw, dh
       );
     } else {
       ctx.fillStyle = '#ef7b3a';
       circle(0, -18, 34);
     }
 
-    if (p.action === 'chop') drawAxeArc(row);
+    if (p.action === 'chop' && !actionReady) drawAxeArc(row);
     ctx.restore();
   }
 
