@@ -1,0 +1,112 @@
+{
+  "updated": "2026-09-28",
+  "purpose": "Implementation reference only. Do not redistribute third-party media from this public repository.",
+  "sources": [
+    {
+      "id": "creativescope-2026-08",
+      "url": "https://www.creativescope.ai/blog/whiteout-survival-ads-apocalypse-playable",
+      "kind": "analysis",
+      "notes": "Eight verified ad creatives, including dimensions, runtime, dates and gameplay summaries."
+    },
+    {
+      "id": "creativescope-2026-07",
+      "url": "https://www.creativescope.ai/blog/whiteout-survival-ads-july-2026",
+      "kind": "analysis",
+      "notes": "July campaign analysis. 360x640 vertical creatives and threat/recovery archetype."
+    },
+    {
+      "id": "youtube-furnace-upgrade",
+      "url": "https://www.youtube.com/watch?v=6kFBZaUBrBA",
+      "kind": "video",
+      "date": "2026-05-20",
+      "notes": "KDG Review - Upgrade the furnace."
+    },
+    {
+      "id": "youtube-furnace-fuel",
+      "url": "https://www.youtube.com/watch?v=MQ5lG34FQWo",
+      "kind": "video",
+      "date": "2026-05-31",
+      "notes": "KDG Review - Fuel the furnace."
+    },
+    {
+      "id": "jp-ad-roundup-2025-03",
+      "url": "https://note.com/koukoku_miruyo/n/na120d9d1aabf",
+      "kind": "archive",
+      "notes": "Japanese ad archive covering fishing, coal rescue, wood territory expansion and oil/heater variants."
+    },
+    {
+      "id": "official-x-2025-03-14-a",
+      "url": "https://twitter.com/WOS_Japan/status/1900379396202246372",
+      "kind": "official-social"
+    },
+    {
+      "id": "official-x-2025-03-14-b",
+      "url": "https://twitter.com/WOS_Japan/status/1900383499535978961",
+      "kind": "official-social"
+    },
+    {
+      "id": "youtube-ad-embedded-jp-archive",
+      "url": "https://www.youtube.com/watch?v=eK2fK3oIs8E",
+      "kind": "video",
+      "notes": "Embedded in Japanese ad archive; oil/heater-style fake gameplay commentary."
+    }
+  ],
+  "creatives": [
+    {
+      "id": "WS-S01",
+      "loop": "logging -> fishing -> food production -> automation",
+      "durationSec": 101,
+      "width": 360,
+      "height": 640
+    },
+    {
+      "id": "WS-S02",
+      "loop": "snow clearing -> house construction -> resources -> forge",
+      "durationSec": 46,
+      "width": 360,
+      "height": 640
+    },
+    {
+      "id": "WS-S03",
+      "loop": "cooking -> construction -> polar bear/enemy defense",
+      "durationSec": 100,
+      "width": 360,
+      "height": 640
+    },
+    {
+      "id": "WS-S04",
+      "loop": "log transport -> furnace/production -> bridge expansion",
+      "durationSec": 42,
+      "width": 360,
+      "height": 640
+    },
+    {
+      "id": "WS-S05",
+      "loop": "wood chopping -> palisade -> fire -> settlement growth",
+      "durationSec": 53,
+      "width": 360,
+      "height": 640
+    },
+    {
+      "id": "WS-S06",
+      "loop": "net fishing -> processing -> workers -> food supply",
+      "durationSec": 51,
+      "width": 1080,
+      "height": 1920
+    },
+    {
+      "id": "WS-S07",
+      "loop": "survivor rescue -> furnace -> housing -> town growth",
+      "durationSec": 54,
+      "width": 360,
+      "height": 640
+    },
+    {
+      "id": "WS-S08",
+      "loop": "defense line -> catapults/turrets -> waves -> boss",
+      "durationSec": 59,
+      "width": 360,
+      "height": 640
+    }
+  ]
+}
