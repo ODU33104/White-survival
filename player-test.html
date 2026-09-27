@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#163241">
+  <title>Player Animation Test</title>
+  <link rel="stylesheet" href="player-test.css">
+</head>
+<body>
+  <main class="test-shell">
+    <section class="game-frame">
+      <canvas id="testCanvas" width="540" height="960" aria-label="プレイヤー操作とアニメーションのテスト"></canvas>
+
+      <div class="topbar">
+        <div>
+          <div class="eyebrow">PLAYER TEST</div>
+          <div class="status" id="status">素材を読み込み中…</div>
+        </div>
+        <button id="resetPos" type="button" class="small-btn">位置リセット</button>
+      </div>
+
+      <div class="debug" id="debug">loading</div>
+
+      <div class="mode-panel" aria-label="アニメーションモード">
+        <button type="button" class="mode active" data-mode="normal">通常</button>
+        <button type="button" class="mode" data-mode="carry">運搬</button>
+        <button type="button" class="mode" data-mode="chop">伐採</button>
+      </div>
+    </section>
+
+    <p class="help">画面を好きな位置からドラッグして移動。PCは WASD / 矢印キー。伐採モードでは移動せず、入力方向へ向いて動作します。</p>
+  </main>
+  <script src="player-test.js"></script>
+</body>
+</html>
