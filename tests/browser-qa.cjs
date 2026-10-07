@@ -40,6 +40,42 @@ async function main() {
     assert.equal(response.status(), 200);
     await page.waitForFunction(() => document.querySelector('#status').textContent.includes('88×88'));
     await page.screenshot({ path: path.join(output, '01-idle.png'), fullPage: true });
+    // Measure whether the underlying walk frames actually differ at the feet.
+    // This inspects raster pixels, not just animation timer changes.
+    const motionRatio = await page.evaluate(async () => {
+      const img = new Image();
+      img.src = 'assets/player/atlas.webp?v=4';
+      await img.decode();
+      const frameW = img.naturalWidth / 8, frameH = img.naturalHeight / 4;
+      const cv = document.createElement('canvas');
+      cv.width = frameW; cv.height = frameH;
+      const cx = cv.getContext('2d', { willReadFrequently: true });
+      const pixels = (row, col) => {
+        cx.clearRect(0, 0, frameW, frameH);
+        cx.drawImage(img, col * frameW, row * frameH,
+          frameW, frameH, 0, 0, frameW, frameH);
+        return cx.getImageData(0, 0, frameW, frameH).data;
+      };
+      return [0, 1, 2, 3].map(row => {
+        const a = pixels(row, 1), b = pixels(row, 2);
+        let count = 0, changed = 0;
+        for (let y = Math.floor(frameH * 0.66); y < frameH * 0.96; y++) {
+          for (let x = Math.floor(frameW * 0.21); x < frameW * 0.79; x++) {
+            const i = (y * frameW + x) * 4;
+            if (a[i + 3] < 40 && b[i + 3] < 40) continue;
+            count++;
+            if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) +
+                Math.abs(a[i + 2] - b[i + 2]) +
+                Math.abs(a[i + 3] - b[i + 3]) > 75) changed++;
+          }
+        }
+        return Number((changed / Math.max(1, count)).toFixed(3));
+      });
+    });
+    console.log('FOOT FRAME DIFFERENCE (front/right/left/back):', motionRatio);
+    assert.ok(motionRatio.every(n => n > 0.025),
+      'each direction must contain visibly different foot pixels between walk frames');
+
 
     await page.keyboard.down('KeyW');
     await page.waitForTimeout(250);
