@@ -7,6 +7,8 @@ on:
       - 'player-motion.js'
       - 'player-test.js'
       - 'player-test.html'
+      - 'game.js'
+      - 'index.html'
       - 'player-test.css'
       - 'assets/player/**'
       - 'tests/**'
