@@ -1,0 +1,28 @@
+name: Player motion quality gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'player-motion.js'
+      - 'player-test.js'
+      - 'player-test.html'
+      - 'player-test.css'
+      - 'assets/player/**'
+      - 'tests/**'
+      - '.github/workflows/player-quality.yml'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check player-motion.js && node --check player-test.js && node --check game.js
+      - run: node --test tests/player-motion.test.cjs
