@@ -87,6 +87,49 @@ async function main() {
     debug = await page.locator('#debug').innerText();
     assert.match(debug, /速度 0/);
 
+    // End-to-end playability: actual game, walking, proximity harvesting,
+    // carrying logs, and delivering them into the furnace.
+    const gamePage = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 1,
+      isMobile: true, hasTouch: true
+    });
+    gamePage.on('pageerror', e => errors.push('game: ' + e.message));
+    const gameResponse = await gamePage.goto('http://127.0.0.1:' + port + '/index.html');
+    assert.equal(gameResponse.status(), 200);
+    await gamePage.locator('#startBtn').click();
+    await gamePage.locator('.stage-card').first().click();
+    await gamePage.locator('#hud:not(.hidden)').waitFor();
+    await gamePage.screenshot({ path: path.join(output, '07-main-stage-idle.png'), fullPage: true });
+    const assetOK = await gamePage.evaluate(async () => {
+      const r = await fetch('assets/player/atlas.webp?v=4');
+      return r.ok && r.headers.get('content-type')?.includes('image/');
+    });
+    assert.ok(assetOK, 'the main game should serve its original sprite atlas');
+
+    await gamePage.keyboard.down('KeyA');
+    await gamePage.waitForTimeout(950);
+    await gamePage.keyboard.up('KeyA');
+    await gamePage.keyboard.down('KeyW');
+    await gamePage.waitForTimeout(190);
+    await gamePage.keyboard.up('KeyW');
+    await gamePage.waitForTimeout(1550);
+    await gamePage.screenshot({ path: path.join(output, '08-main-harvest.png'), fullPage: true });
+    let loadText = await gamePage.locator('#carryHud').innerText();
+    assert.ok(Number(loadText.split('/')[0]) > 0, 'player must collect physical logs when close to trees');
+
+    await gamePage.keyboard.down('KeyD');
+    await gamePage.waitForTimeout(880);
+    await gamePage.keyboard.up('KeyD');
+    await gamePage.keyboard.down('KeyW');
+    await gamePage.waitForTimeout(700);
+    await gamePage.keyboard.up('KeyW');
+    await gamePage.waitForTimeout(550);
+    await gamePage.screenshot({ path: path.join(output, '09-main-delivery.png'), fullPage: true });
+    const heat = parseFloat(await gamePage.locator('#goalBar').evaluate(el => el.style.width));
+    assert.ok(heat > 0, 'furnace must receive logs and increase heat');
+    console.log('MAIN STAGE QA PASSED: walk, auto-harvest, carried logs, furnace delivery; heat=' + heat);
+
     assert.deepEqual(errors, [], 'browser console errors');
     console.log('BROWSER QA PASSED: sprite 88px, 4-way keys, idle, walking, carry, chop, drag, release');
     console.log('Screenshots:', output);
