@@ -41,18 +41,24 @@
 
   let save = loadSave();
 
-  const walkSheet = new Image();
-  const carrySheet = new Image();
-  const actionSheet = new Image();
-  walkSheet.src = 'assets/player/walk.webp';
-  carrySheet.src = 'assets/player/carry.webp';
-  actionSheet.src = 'assets/player/action.webp';
-  let spriteReady = false;
-  let carryReady = false;
-  let actionReady = false;
-  walkSheet.onload = () => { spriteReady = true; };
-  carrySheet.onload = () => { carryReady = true; };
-  actionSheet.onload = () => { actionReady = true; };
+  const Motion = window.PlayerMotion;
+  if (!Motion) throw new Error('player-motion.js is missing');
+  const playerAtlas = new Image();
+  let atlasReady = false;
+  let atlasGrid = null;
+  playerAtlas.onload = () => {
+    try {
+      atlasGrid = Motion.spriteGrid(playerAtlas.naturalWidth, playerAtlas.naturalHeight, 8, 4);
+      atlasReady = true;
+    } catch (err) {
+      toast('スプライトの形式が不正です');
+      console.error(err);
+    }
+  };
+  playerAtlas.onerror = () => {
+    toast('キャラ画像を読み込めません');
+  };
+  playerAtlas.src = 'assets/player/atlas.webp?v=4';
 
   const state = {
     screen: 'title',
@@ -72,7 +78,7 @@
     fullBagToast: 0,
     input: {
       keys: new Set(),
-      joy: { active: false, id: null, cx: 100, cy: 800, x: 0, y: 0 }
+      joy: { active: false, id: null, cx: 100, cy: 800, x: 0, y: 0, strength: 0 }
     }
   };
 
@@ -196,6 +202,7 @@
       moving: false,
       frame: 0,
       anim: 0,
+      stepDistance: 0,
       logs: 0,
       workCd: 0,
       action: 'idle'
@@ -250,22 +257,9 @@
 
     const p = state.player;
     const st = stats();
-    let dx = 0;
-    let dy = 0;
-
-    if (state.input.keys.has('a') || state.input.keys.has('ArrowLeft')) dx -= 1;
-    if (state.input.keys.has('d') || state.input.keys.has('ArrowRight')) dx += 1;
-    if (state.input.keys.has('w') || state.input.keys.has('ArrowUp')) dy -= 1;
-    if (state.input.keys.has('s') || state.input.keys.has('ArrowDown')) dy += 1;
-
-    const j = state.input.joy;
-    if (j.active) {
-      dx += j.x;
-      dy += j.y;
-    }
-
-    const mag = Math.hypot(dx, dy);
-    p.moving = mag > 0.08;
+    const input = Motion.compose(state.input.keys, state.input.joy);
+    p.moving = input.strength > 0.05;
+    if (p.moving) p.dir = Motion.direction(input.x, input.y, p.dir);
 
     let nearbyTree = null;
     let nearest = Infinity;
@@ -288,9 +282,9 @@
 
     const atFurnace = dist(p, state.furnace) < 92;
 
-    if (nearbyTree && !p.moving && p.logs < st.capacity) {
-      p.action = 'chop';
-      faceToward(p, nearbyTree);
+    if (nearbyTree && p.logs < st.capacity) {
+      p.action = p.moving ? 'walk' : 'chop';
+      if (!p.moving) faceToward(p, nearbyTree);
       p.workCd -= dt;
       if (p.workCd <= 0) {
         p.workCd = 0.30;
@@ -313,23 +307,11 @@
       p.workCd = Math.min(p.workCd, 0.12);
     }
 
-    if (p.moving) {
-      const n = mag || 1;
-      dx /= n;
-      dy /= n;
-
-      if (Math.abs(dx) > Math.abs(dy)) p.dir = dx > 0 ? 'right' : 'left';
-      else p.dir = dy > 0 ? 'down' : 'up';
-
-      p.x = clamp(p.x + dx * st.speed * dt, 55, WORLD.w - 55);
-      p.y = clamp(p.y + dy * st.speed * dt, 120, WORLD.h - 70);
-
-      p.anim += dt * 8.5;
-      p.frame = 1 + (Math.floor(p.anim) % 3);
-    } else {
-      p.frame = 0;
-      p.anim = 0;
-    }
+    Motion.advance(p, input, dt, st.speed, {
+      minX: 55, maxX: WORLD.w - 55,
+      minY: 120, maxY: WORLD.h - 70
+    });
+    p.frame = p.moving ? Motion.walkingFrame(p.stepDistance, 27) : 0;
 
     if (atFurnace && p.logs > 0 && state.nextDeposit <= 0) {
       state.nextDeposit = 0.075;
@@ -650,47 +632,39 @@
 
   function drawPlayer() {
     const p = state.player;
-    const row = { down: 0, right: 1, left: 2, up: 3 }[p.dir] || 0;
+    const row = Motion.DIR_ROW[p.dir] ?? 0;
+    const isChopping = p.action === 'chop';
+    const carrying = p.logs > 0;
+    const col = isChopping ? 6 + (Math.floor(state.elapsed / 0.18) % 2)
+      : carrying ? (p.moving ? 4 + (Math.floor(p.stepDistance / 33) % 2) : 4)
+      : p.frame;
+    const size = carrying ? 178 : 168;
 
-    let sheet = walkSheet;
-    let ready = spriteReady;
-    let col = p.frame;
-
-    if (p.action === 'chop' && actionReady) {
-      sheet = actionSheet;
-      ready = true;
-      col = 2 + (Math.floor(state.elapsed * 8) % 2);
-    } else if (p.logs > 0 && carryReady) {
-      sheet = carrySheet;
-      ready = true;
-      col = p.moving ? p.frame : 0;
-    } else if (p.logs > 0) {
-      drawLogStack(p);
-    }
-
+    if (p.logs > 6) drawLogStack(p);
     ctx.save();
     ctx.translate(p.x, p.y);
-
     ctx.fillStyle = 'rgba(25,55,65,.18)';
     ctx.beginPath();
     ctx.ellipse(0, 32, 36, 14, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    if (ready) {
-      const sw = sheet.width / 4;
-      const sh = sheet.height / 4;
-      const dw = p.action === 'chop' ? 148 : (p.logs > 0 ? 142 : 132);
-      const dh = dw;
+    if (atlasReady && atlasGrid) {
+      ctx.imageSmoothingEnabled = true;
       ctx.drawImage(
-        sheet,
-        col * sw, row * sh, sw, sh,
-        -dw / 2, -108, dw, dh
+        playerAtlas,
+        col * atlasGrid.cellWidth, row * atlasGrid.cellHeight,
+        atlasGrid.cellWidth, atlasGrid.cellHeight,
+        -size / 2, -size * 0.72, size, size
       );
     } else {
-      drawVectorPlayer(p);
+      ctx.fillStyle = '#8c2b30';
+      roundRect(-49, -83, 98, 76, 13);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 13px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('素材未読込', 0, -40);
     }
-
-    if (p.action === 'chop' && !actionReady) drawAxeArc(row);
     ctx.restore();
   }
 
@@ -974,25 +948,26 @@
     j.cy = p.y;
     j.x = 0;
     j.y = 0;
+    j.strength = 0;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
   }
 
   function moveJoy(e) {
     const j = state.input.joy;
     if (!j.active || e.pointerId !== j.id) return;
+    e.preventDefault();
     const p = pointerPos(e);
-    let dx = p.x - j.cx;
-    let dy = p.y - j.cy;
-    const m = Math.hypot(dx, dy);
-    const max = 62;
-    if (m > max) {
-      dx = dx / m * max;
-      dy = dy / m * max;
+    let dx = p.x - j.cx, dy = p.y - j.cy;
+    const length = Math.hypot(dx, dy);
+    if (length > 85) {
+      const shift = length - 85;
+      j.cx += dx / length * shift;
+      j.cy += dy / length * shift;
+      dx = p.x - j.cx;
+      dy = p.y - j.cy;
     }
-    j.x = dx / max;
-    j.y = dy / max;
-    if (Math.abs(j.x) < 0.06) j.x = 0;
-    if (Math.abs(j.y) < 0.06) j.y = 0;
+    const v = Motion.joystick(dx, dy, 10, 28);
+    j.x = v.x; j.y = v.y; j.strength = v.strength;
   }
 
   function endJoy(e) {
@@ -1002,6 +977,7 @@
     j.id = null;
     j.x = 0;
     j.y = 0;
+    j.strength = 0;
   }
 
   function vibrate(ms) {
@@ -1009,18 +985,17 @@
   }
 
   canvas.addEventListener('pointerdown', beginJoy);
-  canvas.addEventListener('pointermove', moveJoy);
+  canvas.addEventListener('pointermove', moveJoy, { passive: false });
   canvas.addEventListener('pointerup', endJoy);
   canvas.addEventListener('pointercancel', endJoy);
 
   window.addEventListener('keydown', e => {
-    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    state.input.keys.add(k);
+    state.input.keys.add(e.key.toLowerCase());
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
   });
 
   window.addEventListener('keyup', e => {
-    state.input.keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+    state.input.keys.delete(e.key.toLowerCase());
   });
 
   $('startBtn').onclick = () => {
