@@ -26,3 +26,15 @@ jobs:
           node-version: '22'
       - run: node --check player-motion.js && node --check player-test.js && node --check game.js
       - run: node --test tests/player-motion.test.cjs
+      - name: Browser rendering and controls
+        run: |
+          which google-chrome || which google-chrome-stable
+          npm install --no-save playwright-core@1.56.1
+          CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable)" node tests/browser-qa.cjs
+      - name: Keep mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-mobile-screenshots
+          path: qa/screenshots/
+          if-no-files-found: ignore
