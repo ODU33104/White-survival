@@ -11,7 +11,9 @@
   const W = canvas.width;
   const H = canvas.height;
   const WORLD = { w: 900, h: 1450 };
-  const CELL = 160;
+  const Motion = window.PlayerMotion;
+  if (!Motion) throw new Error('player-motion.js failed to load');
+  let spriteGrid = null;
   const ROW = { down: 0, right: 1, left: 2, up: 3 };
 
   const atlas = new Image();
@@ -34,15 +36,26 @@
     camera: { x: 0, y: 0 },
     input: {
       keys: new Set(),
-      joy: { active: false, id: null, cx: 0, cy: 0, x: 0, y: 0 }
+      joy: { active: false, id: null, cx: 0, cy: 0, x: 0, y: 0, strength: 0 }
     },
     last: performance.now()
   };
 
   atlas.onload = () => {
-    atlasReady = true;
-    statusEl.textContent = '透過スプライト読み込み OK';
-    statusEl.classList.remove('error');
+    try {
+      // Never hand-code a frame dimension: the actual original atlas is 704 x 352.
+      spriteGrid = Motion.spriteGrid(atlas.naturalWidth, atlas.naturalHeight, 8, 4);
+      atlasReady = true;
+      atlasError = false;
+      statusEl.textContent = '素材OK ' + atlas.naturalWidth + '×' + atlas.naturalHeight +
+        ' / コマ ' + spriteGrid.cellWidth + '×' + spriteGrid.cellHeight;
+      statusEl.classList.remove('error');
+    } catch (error) {
+      atlasReady = false;
+      atlasError = true;
+      statusEl.textContent = '素材のコマ分割に失敗: ' + error.message;
+      statusEl.classList.add('error');
+    }
   };
 
   atlas.onerror = () => {
@@ -51,7 +64,7 @@
     statusEl.classList.add('error');
   };
 
-  atlas.src = 'assets/player/atlas.webp?v=1';
+  atlas.src = 'assets/player/atlas.webp?v=4';
 
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
@@ -73,6 +86,7 @@
     state.player.y = WORLD.h * 0.58;
     state.player.vx = 0;
     state.player.vy = 0;
+    state.player.stepDistance = 0;
     state.camera.x = clamp(state.player.x - W / 2, 0, WORLD.w - W);
     state.camera.y = clamp(state.player.y - H * 0.58, 0, WORLD.h - H);
   }
@@ -110,36 +124,33 @@
     j.cy = p.y;
     j.x = 0;
     j.y = 0;
+    j.strength = 0;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
   });
 
   canvas.addEventListener('pointermove', e => {
     const j = state.input.joy;
     if (!j.active || e.pointerId !== j.id) return;
-
+    e.preventDefault();
     const p = pointerPos(e);
     let dx = p.x - j.cx;
     let dy = p.y - j.cy;
-    const radius = 52;
-    const len = Math.hypot(dx, dy);
-
-    if (len > radius) {
-      dx = dx / len * radius;
-      dy = dy / len * radius;
+    const length = Math.hypot(dx, dy);
+    // When a finger drifts far away, move the base with it.
+    // Direction remains stable even when the thumb reaches the screen edge.
+    const maxTravel = 85;
+    if (length > maxTravel) {
+      const overflow = length - maxTravel;
+      j.cx += dx / length * overflow;
+      j.cy += dy / length * overflow;
+      dx = p.x - j.cx;
+      dy = p.y - j.cy;
     }
-
-    const deadPx = 11;
-    if (len < deadPx) {
-      j.x = 0;
-      j.y = 0;
-    } else {
-      // 広告系ゲームの操作感に寄せて、入力強度ではなく方向だけを使う。
-      // 少し倒しただけでも一定速度で動くので、親指の距離調整が不要。
-      const safe = Math.max(len, 0.0001);
-      j.x = dx / safe;
-      j.y = dy / safe;
-    }
-  });
+    const value = Motion.joystick(dx, dy, 10, 28);
+    j.x = value.x;
+    j.y = value.y;
+    j.strength = value.strength;
+  }, { passive: false });
 
   function releasePointer(e) {
     const j = state.input.joy;
@@ -148,40 +159,18 @@
     j.id = null;
     j.x = 0;
     j.y = 0;
+    j.strength = 0;
   }
 
   canvas.addEventListener('pointerup', releasePointer);
   canvas.addEventListener('pointercancel', releasePointer);
 
   function getInput() {
-    let x = 0;
-    let y = 0;
-    const keys = state.input.keys;
-
-    if (keys.has('a') || keys.has('arrowleft')) x -= 1;
-    if (keys.has('d') || keys.has('arrowright')) x += 1;
-    if (keys.has('w') || keys.has('arrowup')) y -= 1;
-    if (keys.has('s') || keys.has('arrowdown')) y += 1;
-
-    x += state.input.joy.x;
-    y += state.input.joy.y;
-
-    const m = Math.hypot(x, y);
-    if (m > 1) {
-      x /= m;
-      y /= m;
-    }
-
-    return { x, y, mag: Math.min(1, m) };
+    return Motion.compose(state.input.keys, state.input.joy);
   }
 
   function chooseDirection(x, y) {
-    if (Math.abs(x) < 0.05 && Math.abs(y) < 0.05) return;
-    if (Math.abs(x) > Math.abs(y)) {
-      state.player.dir = x > 0 ? 'right' : 'left';
-    } else {
-      state.player.dir = y > 0 ? 'down' : 'up';
-    }
+    state.player.dir = Motion.direction(x, y, state.player.dir);
   }
 
   function update(dt) {
@@ -190,63 +179,32 @@
     chooseDirection(input.x, input.y);
 
     const chopping = state.mode === 'chop';
-    const movingInput = input.mag > 0.01;
-    const speed = 248;
-
-    // 加速・減速を廃止。指の方向へ即座に一定速度で移動し、離したら即停止。
-    if (!chopping && movingInput) {
-      const m = Math.hypot(input.x, input.y) || 1;
-      p.vx = input.x / m * speed;
-      p.vy = input.y / m * speed;
-    } else {
-      p.vx = 0;
-      p.vy = 0;
-    }
-
-    const dx = p.vx * dt;
-    const dy = p.vy * dt;
-    p.x = clamp(p.x + dx, 70, WORLD.w - 70);
-    p.y = clamp(p.y + dy, 130, WORLD.h - 100);
-
-    const moving = Math.hypot(p.vx, p.vy) > 1;
+    const movement = chopping ? { x: 0, y: 0, strength: 0 } : input;
+    const distance = Motion.advance(
+      p, movement, dt, 255,
+      { minX: 70, maxX: WORLD.w - 70, minY: 130, maxY: WORLD.h - 100 }
+    );
+    const moving = distance > 0.001;
 
     if (state.mode === 'normal') {
-      if (moving) {
-        p.stepDistance += Math.hypot(dx, dy);
-        // 立ち→左足→立ち→右足を距離基準で回す。
-        // 実際に進んだ距離と足運びが同期するので「滑っている」見え方を減らす。
-        const frames = [0, 1, 0, 2, 0, 3];
-        p.frame = frames[Math.floor(p.stepDistance / 11) % frames.length];
-      } else {
-        p.frame = 0;
-        p.stepDistance = 0;
-      }
+      p.frame = moving ? Motion.walkingFrame(p.stepDistance, 27) : 0;
     } else if (state.mode === 'carry') {
-      if (moving) {
-        p.stepDistance += Math.hypot(dx, dy);
-        p.frame = 4 + (Math.floor(p.stepDistance / 18) % 2);
-      } else {
-        p.frame = 4;
-        p.stepDistance = 0;
-      }
+      p.frame = moving ? 4 + (Math.floor(p.stepDistance / 33) % 2) : 4;
     } else {
       p.animClock += dt;
-      p.frame = 6 + (Math.floor(p.animClock / 0.16) % 2);
+      p.frame = 6 + (Math.floor(p.animClock / 0.18) % 2);
     }
 
-    const targetCamX = clamp(p.x - W / 2, 0, WORLD.w - W);
-    const targetCamY = clamp(p.y - H * 0.58, 0, WORLD.h - H);
-    const camEase = 1 - Math.exp(-14 * dt);
-    state.camera.x = lerp(state.camera.x, targetCamX, camEase);
-    state.camera.y = lerp(state.camera.y, targetCamY, camEase);
+    const tx = clamp(p.x - W / 2, 0, WORLD.w - W);
+    const ty = clamp(p.y - H * 0.58, 0, WORLD.h - H);
+    state.camera.x = Motion.camera(state.camera.x, tx, dt, 14);
+    state.camera.y = Motion.camera(state.camera.y, ty, dt, 14);
 
     debugEl.textContent =
-      'dir ' + p.dir +
-      '  mode ' + state.mode +
-      '  frame ' + p.frame +
-      '  speed ' + Math.round(Math.hypot(p.vx, p.vy)) +
-      '  cell ' + CELL +
-      '  asset ' + (atlasReady ? 'READY' : atlasError ? 'ERROR' : 'LOAD');
+      '向き ' + p.dir + '　動作 ' + state.mode +
+      '　コマ ' + p.frame + '/7' +
+      '　速度 ' + Math.round(Math.hypot(p.vx, p.vy)) +
+      '　素材 ' + (atlasReady ? 'OK' : atlasError ? 'ERROR' : 'LOAD');
   }
 
   function roundRect(x, y, w, h, r) {
@@ -308,13 +266,14 @@
     ctx.fill();
 
     if (atlasReady) {
-      const size = state.mode === 'carry' ? 188 : 180;
-      const moving = Math.hypot(p.vx, p.vy) > 1;
-      const bob = moving && state.mode !== 'chop' ? Math.abs(Math.sin(p.stepDistance / 11 * Math.PI)) * 3 : 0;
+      const size = state.mode === 'carry' ? 198 : 190;
+      const bob = Math.hypot(p.vx, p.vy) > 1 && state.mode !== 'chop'
+        ? Math.abs(Math.sin(p.stepDistance * Math.PI / 54)) * 3 : 0;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(
         atlas,
-        col * CELL, row * CELL, CELL, CELL,
+        col * spriteGrid.cellWidth, row * spriteGrid.cellHeight,
+        spriteGrid.cellWidth, spriteGrid.cellHeight,
         -size / 2, -size * 0.72 - bob, size, size
       );
     } else {
@@ -343,7 +302,7 @@
 
     ctx.globalAlpha = 0.54;
     ctx.beginPath();
-    ctx.arc(j.cx + j.x * 34, j.cy + j.y * 34, 23, 0, Math.PI * 2);
+    ctx.arc(j.cx + j.x * j.strength * 34, j.cy + j.y * j.strength * 34, 23, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
